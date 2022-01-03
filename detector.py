@@ -21,7 +21,10 @@ from datetime import datetime
 # Import writer class from csv module
 from csv import DictWriter
 
+from sklearn.metrics import roc_curve, auc, precision_score, recall_score, f1_score
+
 from matplotlib import pyplot as plt
+import matplotlib.patches as mpatches
 
 IMG_H = 128
 IMG_W = 128
@@ -55,6 +58,114 @@ def prep_stage(x):
 # In[ ]:
 
 
+def plot_roc_curve(fpr, tpr, name_model):
+    plt.plot(fpr, tpr, color='orange', label='ROC')
+    plt.plot([0, 1], [0, 1], color='darkblue', linestyle='--')
+    plt.xlabel('False Positive Rate')
+    plt.ylabel('True Positive Rate')
+    plt.title('Receiver Operating Characteristic (ROC) Curve')
+    plt.legend()
+    plt.savefig(name_model+'_roc_curve.png')
+    plt.show()
+    plt.clf()
+    
+
+
+''' calculate the auc value for lables and scores'''
+def roc(labels, scores, name_model):
+    """Compute ROC curve and ROC area for each class"""
+    roc_auc = dict()
+    # True/False Positive Rates.
+    fpr, tpr, threshold = roc_curve(labels, scores)
+    print("threshold: ", threshold)
+    roc_auc = auc(fpr, tpr)
+    # get a threshod that perform very well.
+    optimal_idx = np.argmax(tpr - fpr)
+    optimal_threshold = threshold[optimal_idx]
+    # draw plot for ROC-Curve
+    plot_roc_curve(fpr, tpr, name_model)
+    
+    return roc_auc, optimal_threshold
+
+def plot_loss_with_rlabel(x_value, y_value, real_label, name_model, prefix, label_axis=["x_label", "y_label"]):
+    # 'bo-' means blue color, round points, solid lines
+    colours = ["blue" if x == 1.0 else "red" for x in real_label]
+    plt.scatter(x_value, y_value, label='loss_value',c = colours)
+#     plt.rcParams["figure.figsize"] = (50,3)
+    # Set a title of the current axes.
+    plt.title(prefix + "_" + name_model)
+    # show a legend on the plot
+    red_patch = mpatches.Patch(color='red', label='Normal Display')
+    blue_patch = mpatches.Patch(color='blue', label='Defect Display')
+    plt.legend(handles=[red_patch, blue_patch])
+    # Display a figure.
+    plt.xlabel(label_axis[0])
+    plt.ylabel(label_axis[1])
+    plt.savefig(name_model + "_" + prefix +'_rec_feat_rlabel.png')
+    plt.show()
+    plt.clf()
+
+
+# In[ ]:
+
+
+def plot_confusion_matrix(cm, classes,
+                        normalize=False,
+                        title='Confusion matrix',
+                        cmap=plt.cm.Blues):
+    """
+    This function prints and plots the confusion matrix.
+    Normalization can be applied by setting `normalize=True`.
+    """
+    plt.imshow(cm, interpolation='nearest', cmap=cmap)
+    plt.title(title)
+    plt.colorbar()
+    tick_marks = np.arange(len(classes))
+    plt.xticks(tick_marks, classes, rotation=45)
+    plt.yticks(tick_marks, classes)
+
+    if normalize:
+        cm = cm.astype('float') / cm.sum(axis=1)[:, np.newaxis]
+        print("Normalized confusion matrix")
+    else:
+        print('Confusion matrix, without normalization')
+
+    print(cm)
+
+    thresh = cm.max() / 2.
+    for i, j in itertools.product(range(cm.shape[0]), range(cm.shape[1])):
+        plt.text(j, i, cm[i, j],
+            horizontalalignment="center",
+            color="white" if cm[i, j] > thresh else "black")
+
+    plt.tight_layout()
+    plt.ylabel('True label')
+    plt.xlabel('Predicted label')
+    plt.savefig(title+'_cm.png')
+    plt.show()
+    plt.clf()
+
+
+# In[ ]:
+
+
+def read_data_with_labels(filepath, class_names):
+    image_list = []
+    label_list = []
+    for class_n in class_names:  # do dogs and cats
+        path = os.path.join(filepath,class_n)  # create path to dogs and cats
+        class_num = class_names.index(class_n)  # get the classification  (0 or a 1). 0=dog 1=cat
+
+        for img in tqdm(os.listdir(path)):  
+            if ".DS_Store" != img:
+                filpath = os.path.join(path,img)
+#                 print(filpath, class_num)
+                image_list.append(filpath)
+                label_list.append(class_num)
+#     print(image_list, label_list)
+    return image_list, label_list
+
+
 def load_image(image_path):
     img = tf.io.read_file(image_path)
     img = tf.io.decode_jpeg(img, channels=IMG_C)
@@ -62,8 +173,20 @@ def load_image(image_path):
     img = tf.cast(img, tf.float32)
 #     rescailing image from 0,255 to -1,1
     img = (img - 127.5) / 127.5
+    
     return img
 
+def load_image_with_label(image_path, label):
+    class_names = ["normal", "covid"]
+#     print(image_path)
+    img = tf.io.read_file(image_path)
+    img = tf.io.decode_jpeg(img, channels=IMG_C)
+    img = prep_stage(img)
+    img = tf.cast(img, tf.float32)
+    #     rescailing image from 0,255 to -1,1
+    img = (img - 127.5) / 127.5
+    
+    return img, label
 
 
 def tf_dataset(images_path, batch_size, labels=False, class_names=None):
@@ -71,6 +194,20 @@ def tf_dataset(images_path, batch_size, labels=False, class_names=None):
     dataset = tf.data.Dataset.from_tensor_slices(images_path)
     dataset = dataset.shuffle(buffer_size=10240)
     dataset = dataset.map(load_image, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+    
+    dataset = dataset.batch(batch_size)
+    dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
+    return dataset
+
+
+def tf_dataset_labels(images_path, batch_size, class_names=None):
+    
+    filenames, labels = read_data_with_labels(images_path, class_names)
+#     print("testing")
+#     print(filenames, labels)
+    dataset = tf.data.Dataset.from_tensor_slices((filenames, labels))
+    dataset = dataset.shuffle(buffer_size=10240)
+    dataset = dataset.map(load_image_with_label, num_parallel_calls=tf.data.experimental.AUTOTUNE)
     
     dataset = dataset.batch(batch_size)
     dataset = dataset.prefetch(buffer_size=tf.data.experimental.AUTOTUNE)
@@ -176,7 +313,7 @@ def build_discriminator(inputs):
     f = [2**i for i in range(4)]
     x = inputs
     for i in range(0, 4):
-        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size= (3, 3), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
+        x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size= (3, 3), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
         x = tf.keras.layers.BatchNormalization()(x)
         x = tf.keras.layers.LeakyReLU(0.2)(x)
         x = tf.keras.layers.Dropout(0.3)(x)
@@ -315,8 +452,8 @@ class DiseaseGAN(tf.keras.models.Model):
             
     def testing(self, filepath, g_filepath, d_filepath, name_model):
 #         threshold = 0.7
-        class_names = ["normal", "covid"] # normal = 0, defect = 1
-        test_dateset = load_image_test(filepath, class_names)
+        class_names = ["normal", "covid"] # normal = 0, covid = 1
+        test_dateset = tf_dataset_labels(filepath, 1, class_names)
         # print(test_dateset)
         
         # range between 0-1
@@ -359,10 +496,10 @@ class DiseaseGAN(tf.keras.models.Model):
         ''' Scale scores vector between [0, 1]'''
         scores_ano = (scores_ano - scores_ano.min())/(scores_ano.max()-scores_ano.min())
         label_axis = ["recon_loss", "scores_anomaly"]
-        plot_loss_with_rlabel(rec_loss_list, scores_ano, real_label, name_model, "anomaly_score", label_axis)
-#         print("scores_ano: ", scores_ano)
-#         print("real_label: ", real_label)
-#         scores_ano = (scores_ano > threshold).astype(int)
+        # plot_loss_with_rlabel(rec_loss_list, scores_ano, real_label, name_model, "anomaly_score", label_axis)
+        # print("scores_ano: ", scores_ano)
+        # print("real_label: ", real_label)
+        # scores_ano = (scores_ano > threshold).astype(int)
         auc_out, threshold = roc(real_label, scores_ano, name_model)
         print("auc: ", auc_out)
         print("threshold: ", threshold)
@@ -590,7 +727,7 @@ if __name__ == "__main__":
     
     mode = "disease_detector"
     batch_size = 32
-    num_epochs = 10
+    num_epochs = 1000
     name_model= str(IMG_H)+"_rgb_"+mode+"_"+str(num_epochs)
     
     resume_trainning = False
@@ -601,7 +738,7 @@ if __name__ == "__main__":
     # set dir of files
     train_images_path = "dataset/train/normal_test/*.jpeg"
     files_train_images_path= []        
-    test_data_path = "mura_data/test"
+    test_data_path = "dataset/test"
     saved_model_path = "saved_model/"
     
     logs_path = "logs/"
