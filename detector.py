@@ -315,7 +315,7 @@ class DiseaseGAN(tf.keras.models.Model):
             
     def testing(self, filepath, g_filepath, d_filepath, name_model):
 #         threshold = 0.7
-        class_names = ["normal", "defect"] # normal = 0, defect = 1
+        class_names = ["normal", "covid"] # normal = 0, defect = 1
         test_dateset = load_image_test(filepath, class_names)
         # print(test_dateset)
         
