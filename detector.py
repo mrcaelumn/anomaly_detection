@@ -47,7 +47,7 @@ def prep_stage(x):
     # x = tf_clahe.clahe(x)
     
     ### implement Histogram normalization to iamges
-    # x = tfa.image.equalize(x)
+    x = tfa.image.equalize(x)
 
     ### crop or pad images
     # x = tf.image.resize_with_crop_or_pad(x, IMG_H, IMG_W)
@@ -262,11 +262,11 @@ feat = FeatureLoss()
 def conv_block(input, num_filters):
     x = tf.keras.layers.Conv2D(num_filters, 3, padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.ReLU(0.2)(x)
+    x = tf.keras.layers.LeakyReLU(0.2)(x)
 
     x = tf.keras.layers.Conv2D(num_filters, 3, padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.ReLU(0.2)(x)
+    x = tf.keras.layers.LeakyReLU(0.2)(x)
 
     return x
 
@@ -299,7 +299,7 @@ def build_generator(input_shape):
     d3 = decoder_block(d2, s2, 128)
     d4 = decoder_block(d3, s1, 64)
 
-    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="sigmoid")(d4)
+    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
 
     model = tf.keras.models.Model(inputs, outputs, name="U-Net")
     return model
@@ -327,6 +327,26 @@ def build_discriminator(inputs):
     model = tf.keras.models.Model(inputs, outputs = [feature, output])
     
     return model
+
+
+# In[ ]:
+
+
+class GCAdam(tf.keras.optimizers.Adam):
+    def get_gradients(self, loss, params):
+        # We here just provide a modified get_gradients() function since we are
+        # trying to just compute the centralized gradients.
+
+        grads = []
+        gradients = super().get_gradients()
+        for grad in gradients:
+            grad_len = len(grad.shape)
+            if grad_len > 1:
+                axis = list(range(grad_len - 1))
+                grad -= tf.reduce_mean(grad, axis=axis, keep_dims=True)
+            grads.append(grad)
+
+        return grads
 
 
 # In[ ]:
@@ -457,7 +477,7 @@ class DiseaseGAN(tf.keras.models.Model):
         # print(test_dateset)
         
         # range between 0-1
-        anomaly_weight = 0.8
+        anomaly_weight = 0.1
         
         scores_ano = []
         real_label = []
@@ -775,8 +795,8 @@ if __name__ == "__main__":
     
     diseaseGAN = DiseaseGAN(g_model, d_model)
     
-    g_optimizer = tf.keras.optimizers.Adam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
-    d_optimizer = tf.keras.optimizers.Adam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
+    g_optimizer = GCAdam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
+    d_optimizer = GCAdam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
     
     diseaseGAN.compile(g_optimizer, d_optimizer, logs_file, resume_trainning)
     
