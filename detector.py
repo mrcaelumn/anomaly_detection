@@ -28,7 +28,7 @@ import matplotlib.patches as mpatches
 
 IMG_H = 128
 IMG_W = 128
-IMG_C = 3  ## Change this to 1 for grayscale.
+IMG_C = 1  ## Change this to 1 for grayscale.
 
 print("TensorFlow version: ", tf.keras.__version__)
 assert version.parse(tf.keras.__version__).release[0] >= 2,     "This notebook requires TensorFlow 2.0 or above."
@@ -262,11 +262,11 @@ feat = FeatureLoss()
 def conv_block(input, num_filters):
     x = tf.keras.layers.Conv2D(num_filters, 3, padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.LeakyReLU(0.2)(x)
+    x = tf.keras.layers.ReLU(0.2)(x)
 
     x = tf.keras.layers.Conv2D(num_filters, 3, padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.LeakyReLU(0.2)(x)
+    x = tf.keras.layers.ReLU(0.2)(x)
 
     return x
 
@@ -299,7 +299,7 @@ def build_generator(input_shape):
     d3 = decoder_block(d2, s2, 128)
     d4 = decoder_block(d3, s1, 64)
 
-    outputs = tf.keras.layers.Conv2D(3, 1, padding="same", activation="tanh")(d4)
+    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="sigmoid")(d4)
 
     model = tf.keras.models.Model(inputs, outputs, name="U-Net")
     return model
@@ -315,14 +315,14 @@ def build_discriminator(inputs):
     for i in range(0, 4):
         x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size= (3, 3), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
         x = tf.keras.layers.BatchNormalization()(x)
-        x = tf.keras.layers.LeakyReLU(0.2)(x)
+        x = tf.keras.layers.ReLU(0.2)(x)
         x = tf.keras.layers.Dropout(0.3)(x)
 
     
     feature = x
     
     x = tf.keras.layers.Flatten()(x)
-    output = tf.keras.layers.Dense(1, activation="tanh")(x)
+    output = tf.keras.layers.Dense(1, activation="sigmoid")(x)
     
     model = tf.keras.models.Model(inputs, outputs = [feature, output])
     
@@ -535,8 +535,8 @@ class DiseaseGAN(tf.keras.models.Model):
 #         path = "mura_data/RGB/test_data/defect/defect.bmp"
 #         path = "rgb_serius_defect/BUTTERFLY (2).bmp"
         paths = {
-            "normal": test_data_path+"/normal/normal.bmp",
-            "covid": test_data_path+"/covid/covid.bmp",
+            "normal": test_data_path+"/normal/normal.jpeg",
+            "covid": test_data_path+"/covid/covid.jpeg",
         }
    
         for i, v in paths.items():
@@ -551,7 +551,7 @@ class DiseaseGAN(tf.keras.models.Model):
             
             
             img = tf.io.read_file(v)
-            img = tf.io.decode_bmp(img, channels=IMG_C)
+            img = tf.io.decode_jpeg(img, channels=IMG_C)
             
             name_subplot = mode+'_original_'+i
             axes.append( fig.add_subplot(rows, cols, 1) )
@@ -738,7 +738,7 @@ if __name__ == "__main__":
     # set dir of files
     train_images_path = "dataset/train/normal_test/*.jpeg"
     files_train_images_path= []        
-    test_data_path = "dataset/test"
+    test_data_path = "dataset/test_clahe"
     saved_model_path = "saved_model/"
     
     logs_path = "logs/"
@@ -788,5 +788,11 @@ if __name__ == "__main__":
     
 #     """ run testing """
     diseaseGAN.testing(test_data_path, path_gmodal, path_dmodal, name_model)
-    # resunetgan.checking_gen_disc(mode, path_gmodal, path_dmodal, test_data_path)
+    diseaseGAN.checking_gen_disc(mode, path_gmodal, path_dmodal, test_data_path)
+
+
+# In[ ]:
+
+
+
 
