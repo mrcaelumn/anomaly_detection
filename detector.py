@@ -177,7 +177,7 @@ def load_image(image_path):
     return img
 
 def load_image_with_label(image_path, label):
-    class_names = ["normal", "covid"]
+    class_names = ["normal", "defect"]
 #     print(image_path)
     img = tf.io.read_file(image_path)
     img = tf.io.decode_jpeg(img, channels=IMG_C)
@@ -352,9 +352,9 @@ class GCAdam(tf.keras.optimizers.Adam):
 # In[ ]:
 
 
-class DiseaseGAN(tf.keras.models.Model):
+class AnomalyGAN(tf.keras.models.Model):
     def __init__(self, generator, discriminator):
-        super(DiseaseGAN, self).__init__()
+        super(AnomalyGAN, self).__init__()
         self.generator = generator
         self.discriminator = discriminator
        
@@ -368,7 +368,7 @@ class DiseaseGAN(tf.keras.models.Model):
     
     
     def compile(self, g_optimizer, d_optimizer, filepath, resume=False):
-        super(DiseaseGAN, self).compile()
+        super(AnomalyGAN, self).compile()
         self.g_optimizer = g_optimizer
         self.d_optimizer = d_optimizer
 #         columns name (epoch, gen_loss, disc_loss)
@@ -472,7 +472,7 @@ class DiseaseGAN(tf.keras.models.Model):
             
     def testing(self, filepath, g_filepath, d_filepath, name_model):
 #         threshold = 0.7
-        class_names = ["normal", "covid"] # normal = 0, covid = 1
+        class_names = ["normal", "defect"] # normal = 0, defect = 1
         test_dateset = tf_dataset_labels(filepath, 1, class_names)
         # print(test_dateset)
         
@@ -551,12 +551,12 @@ class DiseaseGAN(tf.keras.models.Model):
     def checking_gen_disc(self, mode, g_filepath, d_filepath, test_data_path):
         self.generator.load_weights(g_filepath)
         self.discriminator.load_weights(d_filepath)
-#         path = "mura_data/RGB/test_data/normal/normal.bmp"
-#         path = "mura_data/RGB/test_data/defect/defect.bmp"
-#         path = "rgb_serius_defect/BUTTERFLY (2).bmp"
+
         paths = {
-            "normal": test_data_path+"/normal/normal.jpeg",
-            "covid": test_data_path+"/covid/covid.jpeg",
+            "normal": test_data_path+"/normal/normal.jpg",
+            "dot": test_data_path+"/defect/dot.jpg",
+            "joint": test_data_path+"/defect/joint.jpg",
+            "crack": test_data_path+"/defect/crack.jpg",
         }
    
         for i, v in paths.items():
@@ -745,7 +745,7 @@ if __name__ == "__main__":
     # run the function here
     """ Set Hyperparameters """
     
-    mode = "disease_detector"
+    mode = "anomaly_detector"
     batch_size = 32
     num_epochs = 1000
     name_model= str(IMG_H)+"_rgb_"+mode+"_"+str(num_epochs)
@@ -756,9 +756,9 @@ if __name__ == "__main__":
     print("start: ", name_model)
     
     # set dir of files
-    train_images_path = "dataset/train/normal_test/*.jpeg"
+    train_images_path = "dataset/train/normal_test/*.jpg"
     files_train_images_path= []        
-    test_data_path = "dataset/test_clahe"
+    test_data_path = "dataset/test"
     saved_model_path = "saved_model/"
     
     logs_path = "logs/"
@@ -793,22 +793,22 @@ if __name__ == "__main__":
 #     d_model.summary()
 #     g_model.summary()
     
-    diseaseGAN = DiseaseGAN(g_model, d_model)
+    anomalyGAN = AnomalyGAN(g_model, d_model)
     
     g_optimizer = GCAdam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
     d_optimizer = GCAdam(learning_rate=lr, beta_1=0.5, beta_2=0.999)
     
-    diseaseGAN.compile(g_optimizer, d_optimizer, logs_file, resume_trainning)
+    anomalyGAN.compile(g_optimizer, d_optimizer, logs_file, resume_trainning)
     
 #     print(train_images_dataset)
     """ run trainning process """
     train_images = glob(train_images_path)
     train_images_dataset = tf_dataset(train_images, batch_size)
-    run_trainning(diseaseGAN, train_images_dataset, num_epochs, path_gmodal, path_dmodal, logs_path, logs_file, name_model, resume=resume_trainning)
+    run_trainning(anomalyGAN, train_images_dataset, num_epochs, path_gmodal, path_dmodal, logs_path, logs_file, name_model, resume=resume_trainning)
     
 #     """ run testing """
-    diseaseGAN.testing(test_data_path, path_gmodal, path_dmodal, name_model)
-    diseaseGAN.checking_gen_disc(mode, path_gmodal, path_dmodal, test_data_path)
+    anomalyGAN.testing(test_data_path, path_gmodal, path_dmodal, name_model)
+    anomalyGAN.checking_gen_disc(mode, path_gmodal, path_dmodal, test_data_path)
 
 
 # In[ ]:
