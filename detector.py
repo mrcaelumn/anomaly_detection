@@ -178,13 +178,15 @@ def load_image(image_path):
 
 def load_image_with_label(image_path, label):
     class_names = ["normal", "defect"]
-#     print(image_path)
+    # print(image_path)
     img = tf.io.read_file(image_path)
     img = tf.io.decode_jpeg(img, channels=IMG_C)
     img = prep_stage(img)
     img = tf.cast(img, tf.float32)
-    #     rescailing image from 0,255 to -1,1
-    img = (img - 127.5) / 127.5
+    # rescailing image from 0,255 to -1,1
+    # img = (img - 127.5) / 127.5
+    # rescailing image from 0,255 to 0,1
+    img /= 255.0
     
     return img, label
 
@@ -262,11 +264,11 @@ feat = FeatureLoss()
 def conv_block(input, num_filters):
     x = tf.keras.layers.Conv2D(num_filters, 3, padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.LeakyReLU(0.2)(x)
+    x = tf.keras.layers.ReLU(0.2)(x)
 
     x = tf.keras.layers.Conv2D(num_filters, 3, padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
-    x = tf.keras.layers.LeakyReLU(0.2)(x)
+    x = tf.keras.layers.ReLU(0.2)(x)
 
     return x
 
@@ -299,7 +301,7 @@ def build_generator(input_shape):
     d3 = decoder_block(d2, s2, 128)
     d4 = decoder_block(d3, s1, 64)
 
-    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
+    outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="softmax")(d4)
 
     model = tf.keras.models.Model(inputs, outputs, name="U-Net")
     return model
@@ -315,14 +317,14 @@ def build_discriminator(inputs):
     for i in range(0, 4):
         x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size= (3, 3), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
         x = tf.keras.layers.BatchNormalization()(x)
-        x = tf.keras.layers.LeakyReLU(0.2)(x)
+        x = tf.keras.layers.ReLU(0.2)(x)
         x = tf.keras.layers.Dropout(0.3)(x)
 
     
     feature = x
     
     x = tf.keras.layers.Flatten()(x)
-    output = tf.keras.layers.Dense(1, activation="sigmoid")(x)
+    output = tf.keras.layers.Dense(1, activation="softmax")(x)
     
     model = tf.keras.models.Model(inputs, outputs = [feature, output])
     
@@ -420,8 +422,6 @@ class AnomalyGAN(tf.keras.models.Model):
         
         self.d_optimizer.apply_gradients(zip(gradients_of_discriminator, self.discriminator.trainable_variables))
         self.g_optimizer.apply_gradients(zip(gradients_of_generator, self.generator.trainable_variables))
-        
-
 
         return {
             "gen_loss": gen_loss,
