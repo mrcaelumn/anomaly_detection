@@ -28,7 +28,7 @@ import matplotlib.patches as mpatches
 
 IMG_H = 128
 IMG_W = 128
-IMG_C = 1  ## Change this to 1 for grayscale.
+IMG_C = 3  ## Change this to 1 for grayscale.
 
 print("TensorFlow version: ", tf.keras.__version__)
 assert version.parse(tf.keras.__version__).release[0] >= 2,     "This notebook requires TensorFlow 2.0 or above."
@@ -47,7 +47,7 @@ def prep_stage(x):
     # x = tf_clahe.clahe(x)
     
     ### implement Histogram normalization to iamges
-    x = tfa.image.equalize(x)
+    # x = tfa.image.equalize(x)
 
     ### crop or pad images
     # x = tf.image.resize_with_crop_or_pad(x, IMG_H, IMG_W)
@@ -313,9 +313,9 @@ def build_discriminator(inputs):
     f = [2**i for i in range(4)]
     x = inputs
     for i in range(0, 4):
-        x = tf.keras.layers.Conv2D(f[i] * IMG_H ,kernel_size= (3, 3), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
+        x = tf.keras.layers.SeparableConvolution2D(f[i] * IMG_H ,kernel_size= (3, 3), strides=(2, 2), padding='same', kernel_initializer=WEIGHT_INIT)(x)
         x = tf.keras.layers.BatchNormalization()(x)
-        x = tf.keras.layers.ReLU(0.2)(x)
+        x = tf.keras.layers.LeakyReLU(0.2)(x)
         x = tf.keras.layers.Dropout(0.3)(x)
 
     
