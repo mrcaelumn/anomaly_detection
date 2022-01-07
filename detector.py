@@ -184,9 +184,9 @@ def load_image_with_label(image_path, label):
     img = prep_stage(img)
     img = tf.cast(img, tf.float32)
     # rescailing image from 0,255 to -1,1
-    # img = (img - 127.5) / 127.5
+    img = (img - 127.5) / 127.5
     # rescailing image from 0,255 to 0,1
-    img /= 255.0
+    # img /= 255.0
     
     return img, label
 
