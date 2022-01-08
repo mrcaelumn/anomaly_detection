@@ -262,23 +262,18 @@ feat = FeatureLoss()
 
 
 def conv_block(input, num_filters):
-    x = tf.keras.layers.Conv2D(num_filters, 3, padding="same")(input)
+    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(input)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU(0.2)(x)
 
-    x = tf.keras.layers.Conv2D(num_filters, 3, padding="same")(x)
+    x = tf.keras.layers.Conv2D(num_filters, kernel_size=(3,3), padding="same")(x)
     x = tf.keras.layers.BatchNormalization()(x)
     x = tf.keras.layers.LeakyReLU(0.2)(x)
 
     return x
 
-def encoder_block(input, num_filters):
-    x = conv_block(input, num_filters)
-    p = tf.keras.layers.MaxPool2D((2, 2))(x)
-    return x, p
-
 def decoder_block(input, skip_features, num_filters):
-    x = tf.keras.layers.Conv2DTranspose(num_filters, (2, 2), strides=2, padding="same")(input)
+    x = tf.keras.layers.Conv2DTranspose(num_filters, (3, 3), strides=2, padding="same")(input)
     x = tf.keras.layers.Concatenate()([x, skip_features])
     x = conv_block(x, num_filters)
     return x
@@ -289,21 +284,37 @@ def decoder_block(input, skip_features, num_filters):
 
 def build_generator(input_shape):
 
-    s1, p1 = encoder_block(input_shape, 64)
-    s2, p2 = encoder_block(p1, 128)
-    s3, p3 = encoder_block(p2, 256)
-    s4, p4 = encoder_block(p3, 512)
+    # print(inputs)
+    # print("pretained start")
+    """ Pre-trained ResNet50 Model """
+    resnet50 = tf.keras.applications.ResNet50(include_top=False, weights="imagenet", input_tensor=input_shape)
 
-    b1 = conv_block(p4, 1024)
+    """ Encoder """
+    s1 = resnet50.get_layer("input_1").output           ## (256 x 256)
+    s2 = resnet50.get_layer("conv1_relu").output        ## (128 x 128)
+    s3 = resnet50.get_layer("conv2_block3_out").output  ## (64 x 64)
+    s4 = resnet50.get_layer("conv3_block4_out").output  ## (32 x 32)
 
-    d1 = decoder_block(b1, s4, 512)
-    d2 = decoder_block(d1, s3, 256)
-    d3 = decoder_block(d2, s2, 128)
-    d4 = decoder_block(d3, s1, 64)
+    """ Bridge """
+    b1 = resnet50.get_layer("conv4_block6_out").output  ## (16 x 16)
 
+    """ Decoder """
+    # x = IMG_H
+    d1 = decoder_block(b1, s4, 512)                     ## (32 x 32)
+    # x = x/2
+    d2 = decoder_block(d1, s3, 256)                     ## (64 x 64)
+    # x = x/2
+    d3 = decoder_block(d2, s2, 128)                     ## (128 x 128)
+    # x = x/2
+    d4 = decoder_block(d3, s1, 64)                      ## (256 x 256)
+    
+    """ Output """
+#     outputs = tf.keras.layers.Conv2D(3, 1, padding="same", activation="sigmoid")(d4)
     outputs = tf.keras.layers.Conv2D(IMG_C, 1, padding="same", activation="tanh")(d4)
+#     outputs = tf.keras.layers.Conv2D(3, 1, padding="same")(d5)
 
-    model = tf.keras.models.Model(inputs, outputs, name="U-Net")
+    model = tf.keras.models.Model(inputs, outputs)
+
     return model
 
 
